@@ -35,7 +35,7 @@
 *****************************************************************************/
 
 function initSynth(synthNet, piece)
-{  
+{
     // Bass patch
     var bass = synthNet.addNode(new VAnalog(3));
     bass.name = 'bass';
@@ -64,7 +64,7 @@ function initSynth(synthNet, piece)
 
     bass.cutoff = 0.3;
     bass.resonance = 0;
-   
+
     bass.filterEnv.a = 0;
     bass.filterEnv.d = 0.25;
     bass.filterEnv.s = 0.25;
@@ -94,7 +94,7 @@ function initSynth(synthNet, piece)
 
     lead.cutoff = 0.3;
     lead.resonance = 0;
-   
+
     lead.filterEnv.a = 0;
     lead.filterEnv.d = 0.2;
     lead.filterEnv.s = 0;
@@ -147,12 +147,12 @@ function initSynth(synthNet, piece)
     piece.beatsPerMin = 137;
     piece.beatsPerBar = 4;
     piece.noteVal = 4;
-    
+
     piece.loopTime = piece.beatTime(Sequencer.NUM_BEATS);
 
     var sequencer = new Sequencer(
-        piece, 
-        leadTrack, 
+        piece,
+        leadTrack,
         drumTrack,
         'G4',
         'C4',
@@ -174,6 +174,7 @@ function initSynth(synthNet, piece)
         canvas.height - 30,
         60,
         25,
+        undefined,
         function click()
         {
             stopAudio();
@@ -204,6 +205,7 @@ function initSynth(synthNet, piece)
         canvas.height - 30,
         60,
         25,
+        undefined,
         function click()
         {
             stopAudio();
@@ -231,6 +233,7 @@ function initSynth(synthNet, piece)
         canvas.height - 30,
         60,
         25,
+        undefined,
         function click()
         {
             location.hash = '';
@@ -266,19 +269,31 @@ function initSynth(synthNet, piece)
     canvas.addEventListener("click", canvasOnClick, false);
 
     sequencer.draw(canvas, canvasCtx);
+
+    var canvasWidth = canvas.width;
+    var canvasHeight = canvas.height;
+    function resize() {
+        for (var i = 0; i < sequencer.buttons.length; ++i) {
+            sequencer.buttons[i].resize(canvasHeight, canvasWidth);
+        }
+        sequencer.draw(canvas, canvasCtx);
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+    }
+    window.addEventListener('resize', resize, false);
 }
 
 /**
 @class Sequencer interface
 */
 function Sequencer(
-    piece, 
-    leadTrack, 
+    piece,
+    leadTrack,
     drumTrack,
     leadRoot,
     drumRoot,
     leadScale,
-    numOctaves, 
+    numOctaves,
     numDrums
 )
 {
@@ -300,7 +315,7 @@ function Sequencer(
     Piece to render to
     */
     this.piece = piece;
-    
+
     /**
     Lead track
     */
@@ -336,16 +351,80 @@ function Sequencer(
     var numRows = this.leadNotes.length + this.drumNotes.length;
 
     var sequencer = this;
+//    window.addEventListener('resize', sequencer.render(), false);
 
+    this.centreOfCanvas = function(canvas) {
+        return {
+            x: canvas.width / 2,
+            y: canvas.height / 2
+        }
+    }
+    this.ellipsePointAt = function(x0,y0,xl,yl,a) {
+        return {
+            x: x0 + xl * Math.sin(a),
+            y: y0 + yl * Math.cos(a)
+        }
+    }
+    var self = this;
+    this.resize = function () {
+        self.centre = self.centreOfCanvas(canvas);
+        self.ellipseMajor = canvas.width / 2.25;
+        self.ellipseMinor = canvas.height / 2.25;
+        sequencer.render();
+    }
+    window.addEventListener('resize', this.resize, false);
+    this.resize();
+
+    // These are proportional to the ellipse major/minor axes
+    this.ellipseBottom = 0.4;
+    this.ellipseTop = 0.9;
+
+    this.makePathFromCorners = function(corners, ctx) {
+      ctx.beginPath();
+      ctx.moveTo(corners[0].x,corners[0].y);
+      ctx.lineTo(corners[1].x,corners[1].y);
+      ctx.lineTo(corners[2].x,corners[2].y);
+      ctx.lineTo(corners[3].x,corners[3].y);
+      ctx.lineTo(corners[0].x,corners[0].y);
+    }
     for (var row = 0; row < numRows; ++row)
     {
         for (var col = 0; col < Sequencer.NUM_COLS; ++col)
         {
+            var x = Sequencer.SQR_WIDTH * col;
+            var y = Sequencer.SQR_HEIGHT * row;
+            var ySize = 100;
+            var delta = 0.01; // height of buttons...
+            var width = Math.PI/180*10;
+            var ratioX = x / canvas.clientWidth;
+            var ratioX1 = (x + Sequencer.SQR_WIDTH) / canvas.clientWidth;
+            var ratioY = sequencer.ellipseBottom +
+                y / canvas.clientHeight * (sequencer.ellipseTop - sequencer.ellipseBottom);
+            var ratioY1 = sequencer.ellipseBottom +
+                (y+Sequencer.SQR_HEIGHT) / canvas.clientHeight * (sequencer.ellipseTop - sequencer.ellipseBottom);
+            var corners = [
+              sequencer.ellipsePointAt(sequencer.centre.x,sequencer.centre.y,
+                  sequencer.ellipseMajor*ratioY,sequencer.ellipseMinor*ratioY,
+                  Math.PI * 2 * ratioX),
+              sequencer.ellipsePointAt(sequencer.centre.x,sequencer.centre.y,
+                  sequencer.ellipseMajor*ratioY,sequencer.ellipseMinor*ratioY,
+                  Math.PI * 2 * ratioX1),
+              sequencer.ellipsePointAt(sequencer.centre.x,sequencer.centre.y,
+                  sequencer.ellipseMajor*(ratioY1),sequencer.ellipseMinor*(ratioY1),
+                  Math.PI * 2 * ratioX1),
+              sequencer.ellipsePointAt(sequencer.centre.x,sequencer.centre.y,
+                  sequencer.ellipseMajor*(ratioY1),sequencer.ellipseMinor*(ratioY1),
+                  Math.PI * 2 * ratioX)
+            ];
+            //
+            // Approximate the location of the button.
+            //
             var button = this.makeButton(
                 Sequencer.SQR_WIDTH * col,
                 Sequencer.SQR_HEIGHT * row,
                 Sequencer.SQR_WIDTH,
                 Sequencer.SQR_HEIGHT,
+                corners,
                 function click()
                 {
                     this.onState = !this.onState;
@@ -354,24 +433,44 @@ function Sequencer(
                 },
                 function draw(ctx)
                 {
+                    // Draw ellipse-style button...
                     ctx.fillStyle = this.color;
-                    ctx.fillRect(
-                        this.x + Sequencer.SQR_OUTER_TRIM, 
-                        this.y + Sequencer.SQR_OUTER_TRIM, 
-                        this.width - (2 * Sequencer.SQR_OUTER_TRIM),
-                        this.height - (2 * Sequencer.SQR_OUTER_TRIM)
-                    );
 
-                    if (this.onState === false)
-                    {
-                        ctx.fillStyle = 'rgb(0, 0, 0)';
-                        ctx.fillRect(
-                            this.x + Sequencer.SQR_INNER_TRIM, 
-                            this.y + Sequencer.SQR_INNER_TRIM, 
-                            this.width - (2 * Sequencer.SQR_INNER_TRIM),
-                            this.height - (2 * Sequencer.SQR_INNER_TRIM)
-                        );
+                    //this.useRectangleGrid = true;
+                    if (this.useRectangleGrid) {
+                      ctx.moveTo(this.x, this.y);
+                      ctx.fillRect(
+                          this.x + Sequencer.SQR_OUTER_TRIM,
+                          this.y + Sequencer.SQR_OUTER_TRIM,
+                          this.width - (2 * Sequencer.SQR_OUTER_TRIM),
+                          this.height - (2 * Sequencer.SQR_OUTER_TRIM)
+                      );
+
+                      if (this.onState === false)
+                      {
+                          ctx.fillStyle = 'rgb(0, 0, 0)';
+                          ctx.fillRect(
+                              this.x + Sequencer.SQR_INNER_TRIM,
+                              this.y + Sequencer.SQR_INNER_TRIM,
+                              this.width - (2 * Sequencer.SQR_INNER_TRIM),
+                              this.height - (2 * Sequencer.SQR_INNER_TRIM)
+                          );
+                      }
+                    } else {
+                      ctx.strokeStyle="#FF0000";
+                      sequencer.makePathFromCorners(this.corners,ctx);
+                      if (this.onState === false)
+                      {
+                          ctx.fillStyle = 'rgb(0, 0, 0)';
+                      } else {
+                          ctx.fillStyle = 'rgb(#FF, 0, 0)';
+                      }
+
+                      ctx.stroke();
+                      ctx.fill();
+
                     }
+
                 }
             );
 
@@ -487,17 +586,33 @@ Sequencer.prototype.makeButton = function (
     y,
     width,
     height,
+    corners,
     click,
     draw
 )
 {
+    var resize = function (oldHeight, oldWidth) {
+        button.x *= (canvas.width / oldWidth);
+        button.y *= (canvas.height / oldHeight);
+        button.width *= (canvas.width / oldWidth);
+        button.height *= (canvas.height / oldHeight);
+        if (button.corners) {
+            for (var i = 0; i < button.corners.length; ++i) {
+                button.corners[i].x *= (canvas.width / oldWidth);
+                button.corners[i].y *= (canvas.height / oldHeight);
+            }
+        }
+        button.draw(canvasCtx);
+    }
     var button = {
         x       : x,
         y       : y,
         width   : width,
         height  : height,
+        corners : corners,
         click   : click,
         draw    : draw,
+        resize  : resize,
     };
 
     this.buttons.push(button);
@@ -510,13 +625,22 @@ Click handling
 */
 Sequencer.prototype.click = function (x, y)
 {
+    var ctx = canvas.getContext("2d");
     for (var i = 0; i < this.buttons.length; ++i)
     {
         var button = this.buttons[i];
 
-        if (x >= button.x && x < button.x + button.width &&
-            y >= button.y && y < button.y + button.height)
-            button.click();
+        if (this.rectangularGrid || !button.corners) {
+          if (x >= button.x && x < button.x + button.width &&
+              y >= button.y && y < button.y + button.height)
+              button.click();
+        } else {
+          this.makePathFromCorners(button.corners,ctx);
+          if (ctx.isPointInStroke(x, y) || ctx.isPointInPath(x, y)) {
+              button.click();
+              break;
+          }
+        }
     }
 }
 
@@ -546,13 +670,30 @@ Sequencer.prototype.draw = function (canvas, ctx)
 
     if (playPos !== 0)
     {
-        // Draw the cursor line
-        canvasCtx.strokeStyle = "white";
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(cursorPos, 0);
-        canvasCtx.lineTo(cursorPos, cursorBot);
-        canvasCtx.closePath();
-        canvasCtx.stroke();
+        if (this.rectangularGrid) {
+          // Draw the cursor line
+          canvasCtx.strokeStyle = "white";
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(cursorPos, 0);
+          canvasCtx.lineTo(cursorPos, cursorBot);
+          canvasCtx.closePath();
+          canvasCtx.stroke();
+        } else {
+          // Draw the cursor line
+          canvasCtx.strokeStyle = "white";
+          canvasCtx.beginPath();
+          var cursorAngle = playPos * 2 * Math.PI;
+          var start = this.ellipsePointAt(this.centre.x, this.centre.y,
+            this.ellipseBottom * this.ellipseMajor, this.ellipseBottom * this.ellipseMinor,
+            cursorAngle);
+          var end = this.ellipsePointAt(this.centre.x, this.centre.y,
+            this.ellipseTop * this.ellipseMajor, this.ellipseTop * this.ellipseMinor,
+            cursorAngle);
+          canvasCtx.moveTo(start.x, start.y);
+          canvasCtx.lineTo(end.x, end.y);
+          canvasCtx.closePath();
+          canvasCtx.stroke();
+        }
     }
 }
 
@@ -581,13 +722,12 @@ Sequencer.prototype.render = function ()
         console.log(button.note.toString());
 
         this.piece.makeNote(
-            button.track, 
-            beatNo, 
-            button.note, 
+            button.track,
+            beatNo,
+            button.note,
             1 / Sequencer.SQRS_PER_BEAT
         );
     }
 
     location.hash = this.genHash();
 }
-

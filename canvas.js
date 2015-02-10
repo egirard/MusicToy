@@ -45,7 +45,7 @@ function drawGraph(ctx, startX, startY, width, height, data, yMin, yMax)
     );
 
     // Compute the number of samples and lines
-    var numSamples = Math.min(data.length, width); 
+    var numSamples = Math.min(data.length, width);
     var numLines = numSamples - 1;
 
     // Resample the input data
@@ -71,10 +71,26 @@ function drawGraph(ctx, startX, startY, width, height, data, yMin, yMax)
         var x0 = startX + (i * xSpread);
         var x1 = x0 + xSpread;
 
-        ctx.moveTo(x0, v0);  
+        ctx.moveTo(x0, v0);
         ctx.lineTo(x1, v1);
     }
 
     ctx.stroke();
 }
 
+
+(function () {
+    // resize the canvas to fill browser window dynamically
+    window.addEventListener('resize', resizeCanvas, false);
+    window.addEventListener('onload', resizeCanvas, false);
+
+    function resizeCanvas() {
+        var canvas = document.getElementById('canvas');
+        if (!canvas)
+            return;
+        canvas.width = window.innerWidth-10;
+        canvas.height = window.innerHeight - 10;
+        canvasCtx = canvas.getContext("2d");
+    }
+    resizeCanvas();
+})();
